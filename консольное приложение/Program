@@ -1,0 +1,1754 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Globalization;
+
+namespace up
+{
+    // Блюдо ресторана
+    public class Dish
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public string Category { get; set; }   // Салаты, Горячее, Напитки и т.п.
+        public decimal Price { get; set; }
+        public List<IngredientPortion> Ingredients { get; set; } = new List<IngredientPortion>();
+
+        public override string ToString()
+        {
+            return $"ID: {Id,-3} | {Name,-20} | Категория: {Category,-12} | Цена: {Price,8:C}";
+        }
+    }
+
+    // Ингредиент на складе
+    public class Ingredient
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public decimal Quantity { get; set; }  // В условных единицах (кг, л, шт)
+        public string Unit { get; set; }       // кг, л, шт
+        public decimal CostPerUnit { get; set; } // Себестоимость за единицу
+
+        public override string ToString()
+        {
+            return $"ID: {Id,-3} | {Name,-20} | Остаток: {Quantity,8:F2} {Unit,-4} | Цена закупки: {CostPerUnit,8:C}";
+        }
+    }
+
+    // Связь блюда и ингредиента (сколько идёт на одну порцию)
+    public class IngredientPortion
+    {
+        public Ingredient Ingredient { get; set; }
+        public decimal Amount { get; set; } // количество на 1 порцию
+
+        public override string ToString()
+        {
+            return $"{Ingredient.Name} - {Amount} {Ingredient.Unit}";
+        }
+    }
+
+    // Тип сотрудника
+    public enum EmployeeRole
+    {
+        Chef,       // повар
+        Waiter,     // официант
+        Manager
+    }
+
+    // Сотрудник ресторана
+    public class Employee
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+        public EmployeeRole Role { get; set; }
+        public decimal Salary { get; set; }
+
+        public override string ToString()
+        {
+            return $"ID: {Id,-3} | {Name,-20} | Должность: {Role,-8} | Зарплата: {Salary,8:C}";
+        }
+    }
+
+    // Стол в зале
+    public class Table
+    {
+        public int Id { get; set; }
+        public int Seats { get; set; }
+        public bool IsActive { get; set; } = true;
+
+        public override string ToString()
+        {
+            return $"Стол #{Id,-3} | Мест: {Seats,2} | Активен: {(IsActive ? "Да" : "Нет")}";
+        }
+    }
+
+    // Резервирование стола
+    public class Reservation
+    {
+        public int Id { get; set; }
+        public Table Table { get; set; }
+        public string CustomerName { get; set; }
+        public string Phone { get; set; }
+        public DateTime ReservationTime { get; set; }
+        public int GuestsCount { get; set; }
+
+        public override string ToString()
+        {
+            return $"Резерв #{Id} | Стол #{Table.Id} | {CustomerName} | Гостей: {GuestsCount} | Время: {ReservationTime:dd.MM.yyyy HH:mm}";
+        }
+    }
+
+    // Позиция заказа
+    public class OrderItem
+    {
+        public Dish Dish { get; set; }
+        public int Quantity { get; set; }
+        public decimal Subtotal { get; set; }
+
+        public override string ToString()
+        {
+            return $"  {Dish.Name,-20} x{Quantity,2} = {Subtotal,10:C}";
+        }
+    }
+
+    // Заказ со стола
+    public class Order
+    {
+        public int Id { get; set; }
+        public Table Table { get; set; }
+        public Employee Waiter { get; set; }
+        public DateTime OrderTime { get; set; }
+        public List<OrderItem> Items { get; set; } = new List<OrderItem>();
+        public decimal Subtotal { get; set; }
+        public decimal Tax { get; set; }
+        public decimal Tips { get; set; }
+        public decimal Total { get; set; }
+        public bool IsClosed { get; set; }
+
+        public override string ToString()
+        {
+            return $"Заказ #{Id} | Стол #{Table.Id} | Официант: {Waiter.Name} | Время: {OrderTime:HH:mm} | Сумма: {Total,8:C} | Закрыт: {(IsClosed ? "Да" : "Нет")}";
+        }
+    }
+
+    // Основная система учета ресторана
+    public class RestaurantSystem
+    {
+        private List<Dish> dishes = new List<Dish>();
+        private List<Ingredient> ingredients = new List<Ingredient>();
+        private List<Employee> employees = new List<Employee>();
+        private List<Table> tables = new List<Table>();
+        private List<Reservation> reservations = new List<Reservation>();
+        private List<Order> orders = new List<Order>();
+
+        private int nextDishId = 1;
+        private int nextIngredientId = 1;
+        private int nextEmployeeId = 1;
+        private int nextTableId = 1;
+        private int nextReservationId = 1;
+        private int nextOrderId = 1;
+
+        private const decimal TaxRate = 0.10m;   // 10% налог
+        private const decimal DefaultTipsRate = 0.10m; // 10% чаевые по умолчанию
+
+        public RestaurantSystem()
+        {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            InitializeSampleData();
+        }
+
+        private void InitializeSampleData()
+        {
+            // Ингредиенты
+            var ingTomato = new Ingredient { Id = nextIngredientId++, Name = "Помидор", Quantity = 20, Unit = "шт", CostPerUnit = 15 };
+            var ingCheese = new Ingredient { Id = nextIngredientId++, Name = "Сыр моцарелла", Quantity = 10, Unit = "кг", CostPerUnit = 500 };
+            var ingDough = new Ingredient { Id = nextIngredientId++, Name = "Тесто", Quantity = 30, Unit = "кг", CostPerUnit = 80 };
+            var ingChicken = new Ingredient { Id = nextIngredientId++, Name = "Курица", Quantity = 25, Unit = "кг", CostPerUnit = 200 };
+            var ingTea = new Ingredient { Id = nextIngredientId++, Name = "Чай листовой", Quantity = 5, Unit = "кг", CostPerUnit = 600 };
+            var ingWater = new Ingredient { Id = nextIngredientId++, Name = "Вода", Quantity = 200, Unit = "л", CostPerUnit = 5 };
+
+            ingredients.AddRange(new[] { ingTomato, ingCheese, ingDough, ingChicken, ingTea, ingWater });
+
+            // Блюда
+            var pizza = new Dish
+            {
+                Id = nextDishId++,
+                Name = "Пицца Маргарита",
+                Category = "Горячее",
+                Price = 450
+            };
+            pizza.Ingredients.Add(new IngredientPortion { Ingredient = ingDough, Amount = 0.3m });
+            pizza.Ingredients.Add(new IngredientPortion { Ingredient = ingCheese, Amount = 0.15m });
+            pizza.Ingredients.Add(new IngredientPortion { Ingredient = ingTomato, Amount = 2 });
+
+            var salad = new Dish
+            {
+                Id = nextDishId++,
+                Name = "Салат Цезарь",
+                Category = "Салаты",
+                Price = 390
+            };
+            salad.Ingredients.Add(new IngredientPortion { Ingredient = ingChicken, Amount = 0.15m });
+            salad.Ingredients.Add(new IngredientPortion { Ingredient = ingTomato, Amount = 1 });
+
+            var tea = new Dish
+            {
+                Id = nextDishId++,
+                Name = "Чай зелёный",
+                Category = "Напитки",
+                Price = 120
+            };
+            tea.Ingredients.Add(new IngredientPortion { Ingredient = ingTea, Amount = 0.01m });
+            tea.Ingredients.Add(new IngredientPortion { Ingredient = ingWater, Amount = 0.25m });
+
+            dishes.AddRange(new[] { pizza, salad, tea });
+
+            // Сотрудники
+            employees.Add(new Employee { Id = nextEmployeeId++, Name = "Иван Петров", Role = EmployeeRole.Chef, Salary = 50000 });
+            employees.Add(new Employee { Id = nextEmployeeId++, Name = "Мария Сидорова", Role = EmployeeRole.Waiter, Salary = 35000 });
+            employees.Add(new Employee { Id = nextEmployeeId++, Name = "Александр Иванов", Role = EmployeeRole.Waiter, Salary = 34000 });
+            employees.Add(new Employee { Id = nextEmployeeId++, Name = "Елена Смирнова", Role = EmployeeRole.Manager, Salary = 60000 });
+
+            // Столы
+            tables.Add(new Table { Id = nextTableId++, Seats = 2 });
+            tables.Add(new Table { Id = nextTableId++, Seats = 4 });
+            tables.Add(new Table { Id = nextTableId++, Seats = 4 });
+            tables.Add(new Table { Id = nextTableId++, Seats = 6 });
+        }
+
+        public void Run()
+        {
+            bool running = true;
+            while (running)
+            {
+                Console.Clear();
+                Console.WriteLine("════════════════════════════════════════════════════════════");
+                Console.WriteLine("     ИНФОРМАЦИОННАЯ СИСТЕМА УЧЕТА РЕСТОРАНА");
+                Console.WriteLine("════════════════════════════════════════════════════════════");
+                Console.WriteLine();
+                Console.WriteLine("1. Управление меню и ингредиентами");
+                Console.WriteLine("2. Управление заказами со столов");
+                Console.WriteLine("3. Управление персоналом");
+                Console.WriteLine("4. Управление столами и резервированиями");
+                Console.WriteLine("5. Отчёты и финансы");
+                Console.WriteLine("6. Выход");
+                Console.WriteLine();
+                Console.Write("Выберите пункт меню (1-6): ");
+
+                string choice = Console.ReadLine();
+                Console.WriteLine();
+
+                switch (choice)
+                {
+                    case "1":
+                        MenuAndIngredientsManagement();
+                        break;
+                    case "2":
+                        OrdersManagement();
+                        break;
+                    case "3":
+                        EmployeesManagement();
+                        break;
+                    case "4":
+                        TablesAndReservationsManagement();
+                        break;
+                    case "5":
+                        ReportsMenu();
+                        break;
+                    case "6":
+                        running = false;
+                        Console.WriteLine("До свидания!");
+                        break;
+                    default:
+                        Console.WriteLine("Неверный выбор. Нажмите Enter для продолжения...");
+                        Console.ReadLine();
+                        break;
+                }
+            }
+        }
+
+        // ------ Меню и ингредиенты ------
+
+        private void MenuAndIngredientsManagement()
+        {
+            bool managing = true;
+            while (managing)
+            {
+                Console.Clear();
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine("        УПРАВЛЕНИЕ МЕНЮ И ИНГРЕДИЕНТАМИ");
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine();
+                Console.WriteLine("1. Просмотреть меню");
+                Console.WriteLine("2. Добавить блюдо");
+                Console.WriteLine("3. Обновить блюдо");
+                Console.WriteLine("4. Удалить блюдо");
+                Console.WriteLine("5. Просмотреть ингредиенты");
+                Console.WriteLine("6. Добавить ингредиент");
+                Console.WriteLine("7. Обновить ингредиент");
+                Console.WriteLine("8. Удалить ингредиент");
+                Console.WriteLine("9. Вернуться в главное меню");
+                Console.WriteLine();
+                Console.Write("Выберите действие (1-9): ");
+                string choice = Console.ReadLine();
+                Console.WriteLine();
+
+                switch (choice)
+                {
+                    case "1": ViewMenu(); break;
+                    case "2": AddDish(); break;
+                    case "3": UpdateDish(); break;
+                    case "4": DeleteDish(); break;
+                    case "5": ViewIngredients(); break;
+                    case "6": AddIngredient(); break;
+                    case "7": UpdateIngredient(); break;
+                    case "8": DeleteIngredient(); break;
+                    case "9": managing = false; break;
+                    default:
+                        Console.WriteLine("Неверный выбор.");
+                        Console.ReadLine();
+                        break;
+                }
+            }
+        }
+
+        private void ViewMenu()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                         МЕНЮ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!dishes.Any())
+            {
+                Console.WriteLine("Меню пусто.");
+            }
+            else
+            {
+                var grouped = dishes.GroupBy(d => d.Category);
+                foreach (var group in grouped)
+                {
+                    Console.WriteLine($"\nКатегория: {group.Key}");
+                    Console.WriteLine(new string('-', 60));
+                    foreach (var dish in group)
+                    {
+                        Console.WriteLine(dish);
+                        if (dish.Ingredients.Any())
+                        {
+                            Console.WriteLine("   Состав:");
+                            foreach (var portion in dish.Ingredients)
+                            {
+                                Console.WriteLine($"     - {portion.Ingredient.Name} {portion.Amount} {portion.Ingredient.Unit}");
+                            }
+                        }
+                    }
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void AddDish()
+        {
+            Console.WriteLine("ДОБАВИТЬ БЛЮДО\n");
+
+            Console.Write("Название блюда: ");
+            string name = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                Console.WriteLine("Название не может быть пустым.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Категория: ");
+            string category = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                category = "Без категории";
+            }
+
+            Console.Write("Цена: ");
+            if (!decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal price) || price < 0)
+            {
+                Console.WriteLine("Неверная цена.");
+                Console.ReadLine();
+                return;
+            }
+
+            var dish = new Dish
+            {
+                Id = nextDishId++,
+                Name = name,
+                Category = category,
+                Price = price
+            };
+
+            Console.WriteLine("\nДобавить ингредиенты к блюду? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                bool adding = true;
+                while (adding)
+                {
+                    if (!ingredients.Any())
+                    {
+                        Console.WriteLine("Ингредиентов нет, сначала добавьте их в систему.");
+                        break;
+                    }
+
+                    Console.WriteLine("\nСписок ингредиентов:");
+                    foreach (var ing in ingredients)
+                    {
+                        Console.WriteLine(ing);
+                    }
+
+                    Console.Write("ID ингредиента (или Enter для завершения): ");
+                    string input = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(input))
+                    {
+                        adding = false;
+                        break;
+                    }
+
+                    if (!int.TryParse(input, out int ingId))
+                    {
+                        Console.WriteLine("Неверный ID.");
+                        continue;
+                    }
+
+                    var ingredient = ingredients.FirstOrDefault(i => i.Id == ingId);
+                    if (ingredient == null)
+                    {
+                        Console.WriteLine("Ингредиент не найден.");
+                        continue;
+                    }
+
+                    Console.Write("Количество на порцию: ");
+                    if (!decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount) || amount <= 0)
+                    {
+                        Console.WriteLine("Неверное количество.");
+                        continue;
+                    }
+
+                    dish.Ingredients.Add(new IngredientPortion { Ingredient = ingredient, Amount = amount });
+                    Console.WriteLine("Ингредиент добавлен.");
+                }
+            }
+
+            dishes.Add(dish);
+            Console.WriteLine($"\nБлюдо '{name}' добавлено в меню.");
+            Console.ReadLine();
+        }
+
+        private void UpdateDish()
+        {
+            Console.WriteLine("ОБНОВИТЬ БЛЮДО\n");
+            ViewMenu();
+
+            Console.Write("\nВведите ID блюда: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var dish = dishes.FirstOrDefault(d => d.Id == id);
+            if (dish == null)
+            {
+                Console.WriteLine("Блюдо не найдено.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine($"\nТекущее: {dish}");
+            Console.Write("Новое название (Enter - без изменений): ");
+            string name = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(name)) dish.Name = name;
+
+            Console.Write("Новая категория (Enter - без изменений): ");
+            string category = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(category)) dish.Category = category;
+
+            Console.Write("Новая цена (Enter - без изменений): ");
+            string priceInput = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(priceInput) &&
+                decimal.TryParse(priceInput, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal price) &&
+                price >= 0)
+            {
+                dish.Price = price;
+            }
+
+            Console.Write("Обновить состав? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                dish.Ingredients.Clear();
+                Console.WriteLine("Состав очищен, добавьте ингредиенты заново.");
+                bool adding = true;
+                while (adding)
+                {
+                    if (!ingredients.Any())
+                    {
+                        Console.WriteLine("Ингредиентов нет.");
+                        break;
+                    }
+
+                    Console.WriteLine("\nСписок ингредиентов:");
+                    foreach (var ing in ingredients)
+                    {
+                        Console.WriteLine(ing);
+                    }
+
+                    Console.Write("ID ингредиента (или Enter для завершения): ");
+                    string input = Console.ReadLine();
+                    if (string.IsNullOrWhiteSpace(input))
+                    {
+                        adding = false;
+                        break;
+                    }
+
+                    if (!int.TryParse(input, out int ingId))
+                    {
+                        Console.WriteLine("Неверный ID.");
+                        continue;
+                    }
+
+                    var ingredient = ingredients.FirstOrDefault(i => i.Id == ingId);
+                    if (ingredient == null)
+                    {
+                        Console.WriteLine("Ингредиент не найден.");
+                        continue;
+                    }
+
+                    Console.Write("Количество на порцию: ");
+                    if (!decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal amount) || amount <= 0)
+                    {
+                        Console.WriteLine("Неверное количество.");
+                        continue;
+                    }
+
+                    dish.Ingredients.Add(new IngredientPortion { Ingredient = ingredient, Amount = amount });
+                    Console.WriteLine("Ингредиент добавлен.");
+                }
+            }
+
+            Console.WriteLine("\nБлюдо обновлено.");
+            Console.ReadLine();
+        }
+
+        private void DeleteDish()
+        {
+            Console.WriteLine("УДАЛИТЬ БЛЮДО\n");
+            ViewMenu();
+
+            Console.Write("\nВведите ID блюда для удаления: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var dish = dishes.FirstOrDefault(d => d.Id == id);
+            if (dish == null)
+            {
+                Console.WriteLine("Блюдо не найдено.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write($"Удалить '{dish.Name}'? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                dishes.Remove(dish);
+                Console.WriteLine("Блюдо удалено.");
+            }
+            else
+            {
+                Console.WriteLine("Удаление отменено.");
+            }
+            Console.ReadLine();
+        }
+
+        private void ViewIngredients()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                      ИНГРЕДИЕНТЫ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!ingredients.Any())
+            {
+                Console.WriteLine("Ингредиентов нет.");
+            }
+            else
+            {
+                foreach (var ing in ingredients.OrderBy(i => i.Name))
+                {
+                    Console.WriteLine(ing);
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void AddIngredient()
+        {
+            Console.WriteLine("ДОБАВИТЬ ИНГРЕДИЕНТ\n");
+
+            Console.Write("Название: ");
+            string name = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                Console.WriteLine("Название не может быть пустым.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Единица измерения (кг, л, шт): ");
+            string unit = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(unit)) unit = "шт";
+
+            Console.Write("Количество: ");
+            if (!decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal qty) || qty < 0)
+            {
+                Console.WriteLine("Неверное количество.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Закупочная цена за единицу: ");
+            if (!decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal cost) || cost < 0)
+            {
+                Console.WriteLine("Неверная цена.");
+                Console.ReadLine();
+                return;
+            }
+
+            ingredients.Add(new Ingredient
+            {
+                Id = nextIngredientId++,
+                Name = name,
+                Quantity = qty,
+                Unit = unit,
+                CostPerUnit = cost
+            });
+
+            Console.WriteLine("\nИнгредиент добавлен.");
+            Console.ReadLine();
+        }
+
+        private void UpdateIngredient()
+        {
+            Console.WriteLine("ОБНОВИТЬ ИНГРЕДИЕНТ\n");
+            ViewIngredients();
+
+            Console.Write("\nВведите ID ингредиента: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var ing = ingredients.FirstOrDefault(i => i.Id == id);
+            if (ing == null)
+            {
+                Console.WriteLine("Ингредиент не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine($"\nТекущие данные: {ing}");
+
+            Console.Write("Новое название (Enter - без изменений): ");
+            string name = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(name)) ing.Name = name;
+
+            Console.Write("Новая единица измерения (Enter - без изменений): ");
+            string unit = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(unit)) ing.Unit = unit;
+
+            Console.Write("Новое количество (Enter - без изменений): ");
+            string qtyInput = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(qtyInput) &&
+                decimal.TryParse(qtyInput, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal qty) &&
+                qty >= 0)
+            {
+                ing.Quantity = qty;
+            }
+
+            Console.Write("Новая закупочная цена (Enter - без изменений): ");
+            string costInput = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(costInput) &&
+                decimal.TryParse(costInput, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal cost) &&
+                cost >= 0)
+            {
+                ing.CostPerUnit = cost;
+            }
+
+            Console.WriteLine("\nИнгредиент обновлён.");
+            Console.ReadLine();
+        }
+
+        private void DeleteIngredient()
+        {
+            Console.WriteLine("УДАЛИТЬ ИНГРЕДИЕНТ\n");
+            ViewIngredients();
+
+            Console.Write("\nВведите ID ингредиента: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var ing = ingredients.FirstOrDefault(i => i.Id == id);
+            if (ing == null)
+            {
+                Console.WriteLine("Ингредиент не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write($"Удалить '{ing.Name}'? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                ingredients.Remove(ing);
+                Console.WriteLine("Ингредиент удалён.");
+            }
+            else
+            {
+                Console.WriteLine("Удаление отменено.");
+            }
+            Console.ReadLine();
+        }
+
+        // ------ Заказы со столов ------
+
+        private void OrdersManagement()
+        {
+            bool managing = true;
+            while (managing)
+            {
+                Console.Clear();
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine("             УПРАВЛЕНИЕ ЗАКАЗАМИ");
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine();
+                Console.WriteLine("1. Создать новый заказ");
+                Console.WriteLine("2. Добавить позиции в существующий заказ");
+                Console.WriteLine("3. Закрыть заказ и рассчитать счёт");
+                Console.WriteLine("4. Просмотреть все заказы");
+                Console.WriteLine("5. Вернуться в главное меню");
+                Console.WriteLine();
+                Console.Write("Выберите действие (1-5): ");
+                string choice = Console.ReadLine();
+                Console.WriteLine();
+
+                switch (choice)
+                {
+                    case "1": CreateOrder(); break;
+                    case "2": AddItemsToOrder(); break;
+                    case "3": CloseOrder(); break;
+                    case "4": ViewAllOrders(); break;
+                    case "5": managing = false; break;
+                    default:
+                        Console.WriteLine("Неверный выбор.");
+                        Console.ReadLine();
+                        break;
+                }
+            }
+        }
+
+        private void CreateOrder()
+        {
+            Console.WriteLine("СОЗДАНИЕ ЗАКАЗА\n");
+
+            if (!tables.Any())
+            {
+                Console.WriteLine("Нет столов.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine("Список столов:");
+            foreach (var t in tables)
+            {
+                Console.WriteLine(t);
+            }
+
+            Console.Write("Введите номер стола: ");
+            if (!int.TryParse(Console.ReadLine(), out int tableId))
+            {
+                Console.WriteLine("Неверный номер стола.");
+                Console.ReadLine();
+                return;
+            }
+
+            var table = tables.FirstOrDefault(t => t.Id == tableId && t.IsActive);
+            if (table == null)
+            {
+                Console.WriteLine("Стол не найден или не активен.");
+                Console.ReadLine();
+                return;
+            }
+
+            var waiters = employees.Where(e => e.Role == EmployeeRole.Waiter).ToList();
+            if (!waiters.Any())
+            {
+                Console.WriteLine("Нет официантов.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine("\nВыберите официанта:");
+            foreach (var w in waiters)
+            {
+                Console.WriteLine(w);
+            }
+
+            Console.Write("ID официанта: ");
+            if (!int.TryParse(Console.ReadLine(), out int waiterId))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var waiter = waiters.FirstOrDefault(w => w.Id == waiterId);
+            if (waiter == null)
+            {
+                Console.WriteLine("Официант не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            var order = new Order
+            {
+                Id = nextOrderId++,
+                Table = table,
+                Waiter = waiter,
+                OrderTime = DateTime.Now,
+                IsClosed = false
+            };
+
+            Console.WriteLine("\nДобавление блюд в заказ:");
+            AddItemsToOrderInternal(order);
+
+            if (!order.Items.Any())
+            {
+                Console.WriteLine("Заказ пуст, не будет сохранён.");
+            }
+            else
+            {
+                RecalculateOrder(order);
+                orders.Add(order);
+                Console.WriteLine($"\nЗаказ #{order.Id} создан. Сумма к оплате будет рассчитана при закрытии.");
+            }
+
+            Console.ReadLine();
+        }
+
+        private void AddItemsToOrder()
+        {
+            Console.WriteLine("ДОБАВИТЬ ПОЗИЦИИ В ЗАКАЗ\n");
+            ViewAllOrders(false);
+
+            Console.Write("\nВведите ID заказа: ");
+            if (!int.TryParse(Console.ReadLine(), out int orderId))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var order = orders.FirstOrDefault(o => o.Id == orderId);
+            if (order == null)
+            {
+                Console.WriteLine("Заказ не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            if (order.IsClosed)
+            {
+                Console.WriteLine("Заказ уже закрыт.");
+                Console.ReadLine();
+                return;
+            }
+
+            AddItemsToOrderInternal(order);
+            RecalculateOrder(order);
+            Console.WriteLine("\nПозиции добавлены.");
+            Console.ReadLine();
+        }
+
+        private void AddItemsToOrderInternal(Order order)
+        {
+            bool adding = true;
+            while (adding)
+            {
+                if (!dishes.Any())
+                {
+                    Console.WriteLine("Меню пусто.");
+                    break;
+                }
+
+                Console.WriteLine("\nТекущее содержимое заказа:");
+                if (!order.Items.Any())
+                {
+                    Console.WriteLine("  Заказ пуст.");
+                }
+                else
+                {
+                    foreach (var item in order.Items)
+                        Console.WriteLine(item);
+                    Console.WriteLine($"  Сумма без налогов и чаевых: {order.Subtotal,8:C}");
+                }
+
+                Console.WriteLine("\nМеню:");
+                foreach (var d in dishes)
+                {
+                    Console.WriteLine(d);
+                }
+
+                Console.Write("ID блюда (или Enter для завершения): ");
+                string input = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(input))
+                {
+                    adding = false;
+                    break;
+                }
+
+                if (!int.TryParse(input, out int dishId))
+                {
+                    Console.WriteLine("Неверный ID.");
+                    continue;
+                }
+
+                var dish = dishes.FirstOrDefault(d => d.Id == dishId);
+                if (dish == null)
+                {
+                    Console.WriteLine("Блюдо не найдено.");
+                    continue;
+                }
+
+                Console.Write("Количество порций: ");
+                if (!int.TryParse(Console.ReadLine(), out int qty) || qty <= 0)
+                {
+                    Console.WriteLine("Неверное количество.");
+                    continue;
+                }
+
+                if (!CheckAndConsumeIngredients(dish, qty))
+                {
+                    Console.WriteLine("Недостаточно ингредиентов для приготовления.");
+                    continue;
+                }
+
+                var existing = order.Items.FirstOrDefault(i => i.Dish.Id == dish.Id);
+                if (existing == null)
+                {
+                    var item = new OrderItem
+                    {
+                        Dish = dish,
+                        Quantity = qty,
+                        Subtotal = dish.Price * qty
+                    };
+                    order.Items.Add(item);
+                }
+                else
+                {
+                    existing.Quantity += qty;
+                    existing.Subtotal = existing.Dish.Price * existing.Quantity;
+                }
+
+                Console.WriteLine("Позиция добавлена.");
+            }
+        }
+
+        // Проверка и списание ингредиентов со склада
+        private bool CheckAndConsumeIngredients(Dish dish, int portions)
+        {
+            foreach (var portion in dish.Ingredients)
+            {
+                decimal need = portion.Amount * portions;
+                if (portion.Ingredient.Quantity < need)
+                    return false;
+            }
+
+            foreach (var portion in dish.Ingredients)
+            {
+                decimal need = portion.Amount * portions;
+                portion.Ingredient.Quantity -= need;
+            }
+
+            return true;
+        }
+
+        private void RecalculateOrder(Order order)
+        {
+            order.Subtotal = order.Items.Sum(i => i.Subtotal);
+            order.Tax = order.Subtotal * TaxRate;
+            order.Tips = order.Subtotal * DefaultTipsRate;
+            order.Total = order.Subtotal + order.Tax + order.Tips;
+        }
+
+        private void CloseOrder()
+        {
+            Console.WriteLine("ЗАКРЫТИЕ ЗАКАЗА\n");
+            ViewAllOrders(false);
+
+            Console.Write("\nВведите ID заказа: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var order = orders.FirstOrDefault(o => o.Id == id);
+            if (order == null)
+            {
+                Console.WriteLine("Заказ не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            if (order.IsClosed)
+            {
+                Console.WriteLine("Заказ уже закрыт.");
+                Console.ReadLine();
+                return;
+            }
+
+            RecalculateOrder(order);
+
+            Console.WriteLine("\nСЧЁТ:");
+            foreach (var item in order.Items)
+            {
+                Console.WriteLine(item);
+            }
+            Console.WriteLine($"\nСумма:      {order.Subtotal,8:C}");
+            Console.WriteLine($"Налог (10%): {order.Tax,8:C}");
+            Console.WriteLine($"Чаевые (10%): {order.Tips,8:C}");
+            Console.WriteLine($"Итого к оплате: {order.Total,8:C}");
+
+            Console.Write("\nИзменить процент чаевых? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                Console.Write("Новый процент чаевых (0-100): ");
+                if (decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal tipsPercent) && tipsPercent >= 0)
+                {
+                    order.Tips = order.Subtotal * (tipsPercent / 100m);
+                    order.Total = order.Subtotal + order.Tax + order.Tips;
+                    Console.WriteLine($"Новая сумма чаевых: {order.Tips,8:C}");
+                    Console.WriteLine($"Итого к оплате: {order.Total,8:C}");
+                }
+            }
+
+            Console.Write("\nПодтвердить закрытие заказа? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                order.IsClosed = true;
+                Console.WriteLine("Заказ закрыт.");
+            }
+            else
+            {
+                Console.WriteLine("Закрытие отменено.");
+            }
+
+            Console.ReadLine();
+        }
+
+        private void ViewAllOrders(bool waitKey = true)
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                         ЗАКАЗЫ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!orders.Any())
+            {
+                Console.WriteLine("Заказов нет.");
+            }
+            else
+            {
+                foreach (var o in orders.OrderByDescending(o => o.OrderTime))
+                {
+                    Console.WriteLine(o);
+                }
+            }
+
+            if (waitKey)
+            {
+                Console.WriteLine("\nНажмите Enter для продолжения...");
+                Console.ReadLine();
+            }
+        }
+
+        // ------ Персонал ------
+
+        private void EmployeesManagement()
+        {
+            bool managing = true;
+            while (managing)
+            {
+                Console.Clear();
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine("              УПРАВЛЕНИЕ ПЕРСОНАЛОМ");
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine();
+                Console.WriteLine("1. Просмотреть сотрудников");
+                Console.WriteLine("2. Добавить сотрудника");
+                Console.WriteLine("3. Обновить сотрудника");
+                Console.WriteLine("4. Удалить сотрудника");
+                Console.WriteLine("5. Вернуться в главное меню");
+                Console.WriteLine();
+                Console.Write("Выберите действие (1-5): ");
+                string choice = Console.ReadLine();
+                Console.WriteLine();
+
+                switch (choice)
+                {
+                    case "1": ViewEmployees(); break;
+                    case "2": AddEmployee(); break;
+                    case "3": UpdateEmployee(); break;
+                    case "4": DeleteEmployee(); break;
+                    case "5": managing = false; break;
+                    default:
+                        Console.WriteLine("Неверный выбор.");
+                        Console.ReadLine();
+                        break;
+                }
+            }
+        }
+
+        private void ViewEmployees()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                      СОТРУДНИКИ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!employees.Any())
+            {
+                Console.WriteLine("Сотрудников нет.");
+            }
+            else
+            {
+                var grouped = employees.GroupBy(e => e.Role);
+                foreach (var group in grouped)
+                {
+                    Console.WriteLine($"\n{group.Key}:");
+                    foreach (var e in group)
+                        Console.WriteLine(e);
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void AddEmployee()
+        {
+            Console.WriteLine("ДОБАВИТЬ СОТРУДНИКА\n");
+
+            Console.Write("ФИО: ");
+            string name = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                Console.WriteLine("Имя не может быть пустым.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine("Должность (0 - Chef, 1 - Waiter, 2 - Manager): ");
+            if (!int.TryParse(Console.ReadLine(), out int roleInt) || roleInt < 0 || roleInt > 2)
+            {
+                Console.WriteLine("Неверная должность.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Зарплата: ");
+            if (!decimal.TryParse(Console.ReadLine(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal salary) || salary < 0)
+            {
+                Console.WriteLine("Неверная зарплата.");
+                Console.ReadLine();
+                return;
+            }
+
+            employees.Add(new Employee
+            {
+                Id = nextEmployeeId++,
+                Name = name,
+                Role = (EmployeeRole)roleInt,
+                Salary = salary
+            });
+
+            Console.WriteLine("\nСотрудник добавлен.");
+            Console.ReadLine();
+        }
+
+        private void UpdateEmployee()
+        {
+            Console.WriteLine("ОБНОВИТЬ СОТРУДНИКА\n");
+            ViewEmployees();
+
+            Console.Write("\nВведите ID сотрудника: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var emp = employees.FirstOrDefault(e => e.Id == id);
+            if (emp == null)
+            {
+                Console.WriteLine("Сотрудник не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine($"\nТекущие данные: {emp}");
+
+            Console.Write("Новое ФИО (Enter - без изменений): ");
+            string name = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(name)) emp.Name = name;
+
+            Console.Write("Новая должность (0 - Chef, 1 - Waiter, 2 - Manager, Enter - без изменений): ");
+            string roleInput = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(roleInput) &&
+                int.TryParse(roleInput, out int roleInt) &&
+                roleInt >= 0 && roleInt <= 2)
+            {
+                emp.Role = (EmployeeRole)roleInt;
+            }
+
+            Console.Write("Новая зарплата (Enter - без изменений): ");
+            string salaryInput = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(salaryInput) &&
+                decimal.TryParse(salaryInput, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal salary) &&
+                salary >= 0)
+            {
+                emp.Salary = salary;
+            }
+
+            Console.WriteLine("\nСотрудник обновлён.");
+            Console.ReadLine();
+        }
+
+        private void DeleteEmployee()
+        {
+            Console.WriteLine("УДАЛИТЬ СОТРУДНИКА\n");
+            ViewEmployees();
+
+            Console.Write("\nВведите ID сотрудника: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var emp = employees.FirstOrDefault(e => e.Id == id);
+            if (emp == null)
+            {
+                Console.WriteLine("Сотрудник не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write($"Удалить '{emp.Name}'? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                employees.Remove(emp);
+                Console.WriteLine("Сотрудник удалён.");
+            }
+            else
+            {
+                Console.WriteLine("Удаление отменено.");
+            }
+
+            Console.ReadLine();
+        }
+
+        // ------ Столы и резервирования ------
+
+        private void TablesAndReservationsManagement()
+        {
+            bool managing = true;
+            while (managing)
+            {
+                Console.Clear();
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine("     УПРАВЛЕНИЕ СТОЛАМИ И РЕЗЕРВИРОВАНИЕМ");
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine();
+                Console.WriteLine("1. Просмотреть столы");
+                Console.WriteLine("2. Добавить стол");
+                Console.WriteLine("3. Обновить стол");
+                Console.WriteLine("4. Удалить стол");
+                Console.WriteLine("5. Просмотреть резервирования");
+                Console.WriteLine("6. Создать резервирование");
+                Console.WriteLine("7. Отменить резервирование");
+                Console.WriteLine("8. Вернуться в главное меню");
+                Console.WriteLine();
+                Console.Write("Выберите действие (1-8): ");
+                string choice = Console.ReadLine();
+                Console.WriteLine();
+
+                switch (choice)
+                {
+                    case "1": ViewTables(); break;
+                    case "2": AddTable(); break;
+                    case "3": UpdateTable(); break;
+                    case "4": DeleteTable(); break;
+                    case "5": ViewReservations(); break;
+                    case "6": CreateReservation(); break;
+                    case "7": CancelReservation(); break;
+                    case "8": managing = false; break;
+                    default:
+                        Console.WriteLine("Неверный выбор.");
+                        Console.ReadLine();
+                        break;
+                }
+            }
+        }
+
+        private void ViewTables()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                          СТОЛЫ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!tables.Any())
+            {
+                Console.WriteLine("Столов нет.");
+            }
+            else
+            {
+                foreach (var t in tables.OrderBy(t => t.Id))
+                {
+                    Console.WriteLine(t);
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void AddTable()
+        {
+            Console.WriteLine("ДОБАВИТЬ СТОЛ\n");
+            Console.Write("Количество мест: ");
+            if (!int.TryParse(Console.ReadLine(), out int seats) || seats <= 0)
+            {
+                Console.WriteLine("Неверное количество мест.");
+                Console.ReadLine();
+                return;
+            }
+
+            tables.Add(new Table
+            {
+                Id = nextTableId++,
+                Seats = seats,
+                IsActive = true
+            });
+
+            Console.WriteLine("\nСтол добавлен.");
+            Console.ReadLine();
+        }
+
+        private void UpdateTable()
+        {
+            Console.WriteLine("ОБНОВИТЬ СТОЛ\n");
+            ViewTables();
+
+            Console.Write("\nВведите номер стола: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный номер.");
+                Console.ReadLine();
+                return;
+            }
+
+            var table = tables.FirstOrDefault(t => t.Id == id);
+            if (table == null)
+            {
+                Console.WriteLine("Стол не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Новое количество мест (Enter - без изменений): ");
+            string seatsInput = Console.ReadLine();
+            if (!string.IsNullOrWhiteSpace(seatsInput) &&
+                int.TryParse(seatsInput, out int seats) &&
+                seats > 0)
+            {
+                table.Seats = seats;
+            }
+
+            Console.Write("Активен? (д/н, Enter - без изменений): ");
+            string activeInput = Console.ReadLine().Trim().ToLower();
+            if (activeInput == "д") table.IsActive = true;
+            else if (activeInput == "н") table.IsActive = false;
+
+            Console.WriteLine("\nСтол обновлён.");
+            Console.ReadLine();
+        }
+
+        private void DeleteTable()
+        {
+            Console.WriteLine("УДАЛИТЬ СТОЛ\n");
+            ViewTables();
+
+            Console.Write("\nВведите номер стола: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный номер.");
+                Console.ReadLine();
+                return;
+            }
+
+            var table = tables.FirstOrDefault(t => t.Id == id);
+            if (table == null)
+            {
+                Console.WriteLine("Стол не найден.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write($"Удалить стол #{table.Id}? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                tables.Remove(table);
+                Console.WriteLine("Стол удалён.");
+            }
+            else
+            {
+                Console.WriteLine("Удаление отменено.");
+            }
+
+            Console.ReadLine();
+        }
+
+        private void ViewReservations()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                     РЕЗЕРВИРОВАНИЯ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!reservations.Any())
+            {
+                Console.WriteLine("Резервирований нет.");
+            }
+            else
+            {
+                foreach (var r in reservations.OrderBy(r => r.ReservationTime))
+                {
+                    Console.WriteLine(r);
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void CreateReservation()
+        {
+            Console.WriteLine("СОЗДАТЬ РЕЗЕРВИРОВАНИЕ\n");
+
+            if (!tables.Any())
+            {
+                Console.WriteLine("Нет столов.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.WriteLine("Список столов:");
+            foreach (var t in tables)
+                Console.WriteLine(t);
+
+            Console.Write("Номер стола: ");
+            if (!int.TryParse(Console.ReadLine(), out int tableId))
+            {
+                Console.WriteLine("Неверный номер стола.");
+                Console.ReadLine();
+                return;
+            }
+
+            var table = tables.FirstOrDefault(t => t.Id == tableId && t.IsActive);
+            if (table == null)
+            {
+                Console.WriteLine("Стол не найден или не активен.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Имя клиента: ");
+            string name = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                Console.WriteLine("Имя не может быть пустым.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Телефон: ");
+            string phone = Console.ReadLine();
+
+            Console.Write("Количество гостей: ");
+            if (!int.TryParse(Console.ReadLine(), out int guests) || guests <= 0)
+            {
+                Console.WriteLine("Неверное количество гостей.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write("Дата и время (формат дд.ММ.гггг чч:мм): ");
+            if (!DateTime.TryParseExact(Console.ReadLine(), "dd.MM.yyyy HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime time))
+            {
+                Console.WriteLine("Неверный формат даты.");
+                Console.ReadLine();
+                return;
+            }
+
+            // простая проверка пересечения по времени (±2 часа)
+            var conflict = reservations.Any(r =>
+                r.Table.Id == table.Id &&
+                Math.Abs((r.ReservationTime - time).TotalMinutes) < 120);
+
+            if (conflict)
+            {
+                Console.WriteLine("На это время стол уже зарезервирован.");
+                Console.ReadLine();
+                return;
+            }
+
+            reservations.Add(new Reservation
+            {
+                Id = nextReservationId++,
+                Table = table,
+                CustomerName = name,
+                Phone = phone,
+                GuestsCount = guests,
+                ReservationTime = time
+            });
+
+            Console.WriteLine("\nРезервирование создано.");
+            Console.ReadLine();
+        }
+
+        private void CancelReservation()
+        {
+            Console.WriteLine("ОТМЕНИТЬ РЕЗЕРВИРОВАНИЕ\n");
+            ViewReservations();
+
+            Console.Write("\nВведите ID резервирования: ");
+            if (!int.TryParse(Console.ReadLine(), out int id))
+            {
+                Console.WriteLine("Неверный ID.");
+                Console.ReadLine();
+                return;
+            }
+
+            var res = reservations.FirstOrDefault(r => r.Id == id);
+            if (res == null)
+            {
+                Console.WriteLine("Резервирование не найдено.");
+                Console.ReadLine();
+                return;
+            }
+
+            Console.Write($"Отменить резервирование #{res.Id}? (д/н): ");
+            if (Console.ReadLine().Trim().ToLower() == "д")
+            {
+                reservations.Remove(res);
+                Console.WriteLine("Резервирование отменено.");
+            }
+            else
+            {
+                Console.WriteLine("Отмена отменена.");
+            }
+
+            Console.ReadLine();
+        }
+
+        // ------ Отчёты и финансы ------
+
+        private void ReportsMenu()
+        {
+            bool managing = true;
+            while (managing)
+            {
+                Console.Clear();
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine("                  ОТЧЁТЫ И ФИНАНСЫ");
+                Console.WriteLine("═══════════════════════════════════════════════════════");
+                Console.WriteLine();
+                Console.WriteLine("1. Ежедневный отчёт выручки");
+                Console.WriteLine("2. Отчёт по расходам на продукты");
+                Console.WriteLine("3. Краткая сводка по персоналу");
+                Console.WriteLine("4. Вернуться в главное меню");
+                Console.WriteLine();
+                Console.Write("Выберите действие (1-4): ");
+                string choice = Console.ReadLine();
+                Console.WriteLine();
+
+                switch (choice)
+                {
+                    case "1": DailyRevenueReport(); break;
+                    case "2": IngredientsCostReport(); break;
+                    case "3": StaffSummaryReport(); break;
+                    case "4": managing = false; break;
+                    default:
+                        Console.WriteLine("Неверный выбор.");
+                        Console.ReadLine();
+                        break;
+                }
+            }
+        }
+
+        private void DailyRevenueReport()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("                 ЕЖЕДНЕВНЫЙ ОТЧЁТ ВЫРУЧКИ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            Console.Write("Введите дату (дд.ММ.гггг) или Enter для сегодняшней: ");
+            string input = Console.ReadLine();
+            DateTime date;
+            if (string.IsNullOrWhiteSpace(input))
+                date = DateTime.Today;
+            else if (!DateTime.TryParseExact(input, "dd.MM.yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+            {
+                Console.WriteLine("Неверный формат даты.");
+                Console.ReadLine();
+                return;
+            }
+
+            var dailyOrders = orders.Where(o => o.OrderTime.Date == date.Date && o.IsClosed).ToList();
+
+            if (!dailyOrders.Any())
+            {
+                Console.WriteLine("Закрытых заказов за выбранный день нет.");
+            }
+            else
+            {
+                decimal totalRevenue = dailyOrders.Sum(o => o.Total);
+                decimal totalTax = dailyOrders.Sum(o => o.Tax);
+                decimal totalTips = dailyOrders.Sum(o => o.Tips);
+
+                Console.WriteLine($"Дата: {date:dd.MM.yyyy}");
+                Console.WriteLine($"Всего заказов: {dailyOrders.Count}");
+                Console.WriteLine($"Выручка (с налогами и чаевыми): {totalRevenue,8:C}");
+                Console.WriteLine($"Из них налоги: {totalTax,8:C}");
+                Console.WriteLine($"Чаевые: {totalTips,8:C}");
+                Console.WriteLine();
+
+                var byWaiter = dailyOrders.GroupBy(o => o.Waiter.Name)
+                    .Select(g => new
+                    {
+                        Waiter = g.Key,
+                        Orders = g.Count(),
+                        Sum = g.Sum(o => o.Total)
+                    });
+
+                Console.WriteLine("Выручка по официантам:");
+                foreach (var w in byWaiter)
+                {
+                    Console.WriteLine($"  {w.Waiter,-20} Заказов: {w.Orders,3} | Сумма: {w.Sum,8:C}");
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void IngredientsCostReport()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("           ОТЧЁТ ПО РАСХОДАМ НА ПРОДУКТЫ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!ingredients.Any())
+            {
+                Console.WriteLine("Ингредиентов нет.");
+            }
+            else
+            {
+                decimal totalStockCost = ingredients.Sum(i => i.Quantity * i.CostPerUnit);
+                Console.WriteLine($"Текущая стоимость складских запасов: {totalStockCost,8:C}");
+                Console.WriteLine();
+                Console.WriteLine("Ингредиенты:");
+                foreach (var i in ingredients)
+                {
+                    decimal cost = i.Quantity * i.CostPerUnit;
+                    Console.WriteLine($"  {i.Name,-20} Остаток: {i.Quantity,8:F2} {i.Unit,-4} | Стоимость: {cost,8:C}");
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+
+        private void StaffSummaryReport()
+        {
+            Console.Clear();
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine("               КРАТКАЯ СВОДКА ПО ПЕРСОНАЛУ");
+            Console.WriteLine("══════════════════════════════════════════════════════════");
+            Console.WriteLine();
+
+            if (!employees.Any())
+            {
+                Console.WriteLine("Сотрудников нет.");
+            }
+            else
+            {
+                decimal totalSalary = employees.Sum(e => e.Salary);
+                Console.WriteLine($"Всего сотрудников: {employees.Count}");
+                Console.WriteLine($"Общий фонд зарплаты: {totalSalary,8:C}");
+                Console.WriteLine();
+
+                var grouped = employees.GroupBy(e => e.Role);
+                foreach (var g in grouped)
+                {
+                    Console.WriteLine($"{g.Key}: {g.Count()} чел., суммарная зарплата: {g.Sum(e => e.Salary),8:C}");
+                }
+            }
+
+            Console.WriteLine("\nНажмите Enter для продолжения...");
+            Console.ReadLine();
+        }
+    }
+
+    internal class Program
+    {
+        static void Main(string[] args)
+        {
+            var system = new RestaurantSystem();
+            system.Run();
+        }
+    }
+}
